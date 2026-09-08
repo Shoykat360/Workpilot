@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "522033934337",
+    "project_id": "workpilot-mini",
+    "storage_bucket": "workpilot-mini.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:522033934337:android:741679e5d221c112c99000",
+        "android_client_info": {
+          "package_name": "com.example.workpilotmini"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEdJUFk0GT6TacRTfTS9p4e9K6E_B05gA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

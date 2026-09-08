@@ -1,0 +1,204 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myUid() {
+      return request.auth.uid;
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(myUid())).data;
+    }
+
+    function existingTeam(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)).data;
+    }
+
+    function inTeam(teamId) {
+      return isSignedIn() && myProfile().teamId == teamId;
+    }
+
+    function isTeamAdmin(teamId) {
+      return inTeam(teamId) && myProfile().role == 'admin';
+    }
+
+    // True if the caller is an admin of *some* team (used for the email-invite
+    // flow, where we don't know the target team from the path being read/written).
+    function isAnyTeamAdmin() {
+      return isSignedIn() && myProfile().teamId != '' && myProfile().role == 'admin';
+    }
+
+    // Only fields the client may ever change on a user profile.
+    function unchangedIdentityFields() {
+      return request.resource.data.uid == resource.data.uid &&
+             request.resource.data.email == resource.data.email;
+    }
+
+    match /users/{uid} {
+      // Read: your own profile, any profile belonging to your own team (needed for
+      // attendance / visit lists that show teammate names), or — for a team admin only —
+      // a profile that isn't on any team yet (needed to look someone up by email before
+      // inviting them; an admin can never read a profile that already belongs to another
+      // team's roster this way).
+      allow read: if isSignedIn() && (
+        myUid() == uid ||
+        (resource.data.teamId != '' && resource.data.teamId == myProfile().teamId) ||
+        (resource.data.teamId == '' && isAnyTeamAdmin())
+      );
+
+      allow create: if isSignedIn() &&
+        myUid() == uid &&
+        request.resource.data.uid == uid &&
+        request.resource.data.role == 'member' &&
+        request.resource.data.teamId == '';
+
+      // Self-service profile edit: name / mobile / address / soloMode / profileCompleted
+      // only — role, teamId and isActive must stay exactly as they were. This is the
+      // Profile screen's "save" and the "use individually" action.
+      allow update: if isSignedIn() && myUid() == uid && unchangedIdentityFields() &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.teamId == resource.data.teamId &&
+        request.resource.data.isActive == resource.data.isActive;
+
+      // Update: only your own doc, cannot touch uid/email, and role/teamId
+      // may only be set to values that match a team you are legitimately
+      // becoming admin of (just created) or already a listed member of
+      // (just joined) — this closes the "self-promote to admin" hole.
+      allow update: if isSignedIn() && myUid() == uid && unchangedIdentityFields() && (
+        (
+          request.resource.data.role == 'admin' &&
+          existingTeam(request.resource.data.teamId).adminUid == myUid()
+        ) ||
+        (
+          request.resource.data.role == 'member' &&
+          myUid() in existingTeam(request.resource.data.teamId).memberUids
+        )
+      );
+
+      // Email-invite: a team admin may pull a *currently unteamed* user directly onto
+      // their own team as a plain member. Can't touch anyone already on a team (no
+      // hijacking), can't grant admin, can't touch identity fields.
+      allow update: if isAnyTeamAdmin() &&
+        resource.data.teamId == '' &&
+        unchangedIdentityFields() &&
+        request.resource.data.teamId == myProfile().teamId &&
+        request.resource.data.role == 'member';
+
+      // Admin toggling a teammate's isActive flag (activate/deactivate) — everything
+      // else on the document must stay identical.
+      allow update: if isAnyTeamAdmin() &&
+        uid != myUid() &&
+        resource.data.teamId == myProfile().teamId &&
+        unchangedIdentityFields() &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.teamId == resource.data.teamId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive']);
+
+      // Admin removing a teammate from the team: resets teamId to '' and role back to
+      // 'member' so the person keeps their login and can join/create another team.
+      allow update: if isAnyTeamAdmin() &&
+        uid != myUid() &&
+        resource.data.teamId == myProfile().teamId &&
+        unchangedIdentityFields() &&
+        request.resource.data.teamId == '' &&
+        request.resource.data.role == 'member';
+
+      // Admin deleting a teammate's profile document entirely (their Firebase Auth
+      // account itself can't be deleted from the client — see TeamRepository.deleteMember).
+      allow delete: if isAnyTeamAdmin() &&
+        uid != myUid() &&
+        resource.data.teamId == myProfile().teamId;
+
+      // NOTE: the old "admin creates a brand-new member account directly" create-rule
+      // has been removed along with that feature (see TeamRepository.kt). The only way
+      // to add someone now is the email-invite update rule above, which requires the
+      // person to already have a self-signed-up profile doc.
+    }
+
+    // Solo-mode users (no team yet) keep their own attendance/visits here instead of
+    // under a team document. Owner-only: nobody but the user themself can read or
+    // write their soloData, regardless of current team status — so if they later join
+    // a team, this history simply stays theirs as a private archive.
+    match /soloData/{ownerUid} {
+      match /attendance/{recordId} {
+        allow read: if isSignedIn() && myUid() == ownerUid;
+        allow create: if isSignedIn() && myUid() == ownerUid &&
+          request.resource.data.uid == myUid() &&
+          request.resource.data.dateKey is string &&
+          request.resource.data.checkInTime is number;
+        // Attendance is otherwise an immutable audit trail — the one allowed edit is
+        // the owner checking themself out once: only checkOutTime/outLat/outLng may
+        // change, and only while checkOutTime is still null (can't check out twice).
+        allow update: if isSignedIn() && myUid() == ownerUid &&
+          resource.data.uid == myUid() &&
+          resource.data.checkOutTime == null &&
+          request.resource.data.checkOutTime is number &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkOutTime', 'outLat', 'outLng']);
+      }
+
+      match /visits/{visitId} {
+        allow read: if isSignedIn() && myUid() == ownerUid;
+        allow create: if isSignedIn() && myUid() == ownerUid && request.resource.data.uid == myUid();
+        // Only the author may edit their own visit, and only to flip
+        // reminderScheduled — not to rewrite lead data after the fact.
+        allow update: if isSignedIn() && myUid() == ownerUid &&
+          resource.data.uid == myUid() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reminderScheduled']);
+      }
+    }
+
+    match /teams/{teamId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+        request.resource.data.adminUid == myUid() &&
+        request.resource.data.memberUids == [myUid()] &&
+        request.resource.data.maxSize >= 2 && request.resource.data.maxSize <= 5;
+
+      // Admin can update anything about their own team.
+      allow update: if isSignedIn() && resource.data.adminUid == myUid();
+
+      // Non-admins may ONLY append themselves to memberUids — every other
+      // field (name, inviteCode, adminUid, maxSize) must stay identical,
+      // the team must not already be full, and they can't already be in it.
+      allow update: if isSignedIn() &&
+        resource.data.adminUid != myUid() &&
+        !(myUid() in resource.data.memberUids) &&
+        resource.data.memberUids.size() < resource.data.maxSize &&
+        request.resource.data.memberUids == resource.data.memberUids.concat([myUid()]) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids']);
+
+      match /attendance/{recordId} {
+        // Admin sees everyone's check-ins; a regular member only ever sees their own.
+        allow read: if inTeam(teamId) && (isTeamAdmin(teamId) || resource.data.uid == myUid());
+        allow create: if inTeam(teamId) &&
+          request.resource.data.uid == myUid() &&
+          request.resource.data.dateKey is string &&
+          request.resource.data.checkInTime is number;
+        // Attendance is otherwise an immutable audit trail — the one allowed edit is
+        // the owner checking themself out once (admin included): only checkOutTime/
+        // outLat/outLng may change, and only while checkOutTime is still null.
+        allow update: if inTeam(teamId) &&
+          resource.data.uid == myUid() &&
+          resource.data.checkOutTime == null &&
+          request.resource.data.checkOutTime is number &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkOutTime', 'outLat', 'outLng']);
+      }
+
+      match /visits/{visitId} {
+        // Admin sees the whole team's visit/reminder history; a member only sees their own.
+        allow read: if inTeam(teamId) && (isTeamAdmin(teamId) || resource.data.uid == myUid());
+        allow create: if inTeam(teamId) && request.resource.data.uid == myUid();
+        // Only the author may edit their own visit, and only to flip
+        // reminderScheduled — not to rewrite lead data after the fact.
+        allow update: if inTeam(teamId) &&
+          resource.data.uid == myUid() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reminderScheduled']);
+      }
+    }
+  }
+}
