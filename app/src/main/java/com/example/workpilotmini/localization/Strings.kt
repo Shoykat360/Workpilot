@@ -272,6 +272,38 @@ object Strings {
         t("A:$attendance  V:$visits  R:$reminders", "A:$attendance  V:$visits  R:$reminders")
     fun reportVisitListHeader() = t("এই সময়ে ভিজিট এন্ট্রি", "Visit entries in this period")
 
+    // Report — dashboard-style redesign
+    fun reportsSubtitleSelf() = t("আপনার কার্যক্রমের সারসংক্ষেপ", "Overview of your activity")
+    fun reportsSubtitleAdmin() = t("টিম পারফরম্যান্সের সারসংক্ষেপ", "Team performance overview")
+    fun reportsSubtitleForMember() = t("কার্যক্রমের সারসংক্ষেপ", "Activity overview")
+    fun reportStatInline(percent: Int) = t("$percent% উপস্থিতি", "$percent% present")
+    fun percentInline(percent: Int) = "$percent%"
+    fun reportSummaryHeader() = t("সারসংক্ষেপ", "Summary")
+    fun attendanceRateLabel() = t("উপস্থিতি হার", "Attendance rate")
+    fun visitCompletionLabel() = t("ভিজিট সম্পন্ন", "Visits completed")
+    fun reminderCompletionLabel() = t("রিমাইন্ডার ফলো-আপ", "Reminder follow-up")
+    fun targetInline(percent: Int) = t("লক্ষ্য: $percent%", "Target: $percent%")
+    fun fractionInline(current: Int, total: Int) = "$current/$total"
+    fun monthlyActivityHeader() = t("এই মাসের কার্যক্রম", "This month's activity")
+    fun weekRangeLabel(weekNum: Int, start: Int, end: Int) = t("সপ্তাহ $weekNum\n($start-$end)", "Week $weekNum\n($start-$end)")
+    fun chartLegendAttendance() = t("Attendance", "Attendance")
+    fun chartLegendVisits() = t("Visits", "Visits")
+    fun chartLegendReminders() = t("Reminders", "Reminders")
+    fun recentActivityHeader() = t("সাম্প্রতিক কার্যক্রম", "Recent activity")
+    fun noRecentActivity() = t("কোনো সাম্প্রতিক কার্যক্রম নেই।", "No recent activity yet.")
+    fun checkInActivityTitle() = t("Check-in", "Check-in")
+    fun visitActivityTitle() = t("Visit Entry", "Visit Entry")
+    fun reminderActivityTitle() = t("Reminder", "Reminder")
+    fun doneChip() = t("সম্পন্ন", "Done")
+    fun totalTeamLabel() = t("মোট টিম", "Total Team")
+    fun activeInline(count: Int) = t("সক্রিয়: $count", "Active: $count")
+    fun checkedInStatLabel() = t("Checked In", "Checked In")
+    fun notCheckedInStatLabel() = t("Not Checked In", "Not Checked In")
+    fun topPerformersHeader() = t("শীর্ষ পারফরমার", "Top performers")
+    fun checkInFractionInline(current: Int, total: Int) = t("Check-in $current/$total", "Check-in $current/$total")
+    fun visitsCountInline(count: Int) = t("Visits $count", "Visits $count")
+    fun todayDateLabel(date: String) = date
+
     // Notifications (bell icon — near-due reminders only, 2 days ahead)
     fun notificationsHeader() = t("Notifications", "Notifications")
     fun notificationsSubtitle() =
