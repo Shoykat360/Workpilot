@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import android.util.Patterns
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 
 data class AuthUiState(
     // True only while we're checking whether a Firebase session already exists on
@@ -41,7 +42,14 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    private fun isValidEmail(email: String) = Patterns.EMAIL_ADDRESS.matcher(email).matches()
+    private val emailRegex = Regex("^[A-Za-z0-9+_.-]+@(?:[A-Za-z0-9-]+\\.)+[A-Za-z]{2,}$")
+
+    private fun isValidEmail(email: String): Boolean {
+        val trimmed = email.trim()
+        return trimmed.isNotBlank() &&
+                Patterns.EMAIL_ADDRESS.matcher(trimmed).matches() &&
+                emailRegex.matches(trimmed)
+    }
 
     fun signUp(name: String, email: String, password: String) {
         if (name.isBlank() || email.isBlank() || password.length < 6) {
@@ -68,6 +76,11 @@ class AuthViewModel : ViewModel() {
             _state.value = _state.value.copy(errorMessage = "ইমেইল ও পাসওয়ার্ড দিন")
             return
         }
+
+        if (!isValidEmail(email)) {
+            _state.value = _state.value.copy(errorMessage = "সঠিক ইমেইল ঠিকানা দিন")
+            return
+        }
         _state.value = _state.value.copy(isLoading = true, errorMessage = null)
         viewModelScope.launch {
             val result = repo.login(email, password)
@@ -82,14 +95,23 @@ class AuthViewModel : ViewModel() {
     /** Always reports success in the UI (even for unregistered emails) so we don't
      *  reveal which addresses have accounts — a common account-enumeration leak. */
     fun sendPasswordReset(email: String) {
-        if (!isValidEmail(email)) {
+        val trimmed = email.trim()
+        if (!isValidEmail(trimmed)) {
             _state.value = _state.value.copy(errorMessage = "সঠিক ইমেইল ঠিকানা দিন")
             return
         }
         _state.value = _state.value.copy(isLoading = true, errorMessage = null, resetEmailSent = false)
         viewModelScope.launch {
-            repo.sendPasswordReset(email)
-            _state.value = _state.value.copy(isLoading = false, resetEmailSent = true)
+            val result = repo.sendPasswordReset(trimmed)
+            result.onSuccess {
+                _state.value = _state.value.copy(isLoading = false, resetEmailSent = true)
+            }.onFailure { e ->
+                if (e is FirebaseAuthInvalidUserException) {
+                    _state.value = _state.value.copy(isLoading = false, resetEmailSent = true)
+                } else {
+                    _state.value = _state.value.copy(isLoading = false, errorMessage = AppError.message(e))
+                }
+            }
         }
     }
 

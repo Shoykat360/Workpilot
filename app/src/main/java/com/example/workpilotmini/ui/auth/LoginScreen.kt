@@ -14,6 +14,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.workpilotmini.localization.AppLanguage
 import com.example.workpilotmini.localization.Strings
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.text.input.VisualTransformation
 
 @Composable
 fun LoginScreen(
@@ -26,6 +30,8 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var showResetDialog by remember { mutableStateOf(false) }
     var resetEmail by remember { mutableStateOf("") }
+
+    var passwordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.isLoggedIn) {
         if (state.isLoggedIn) onLoggedIn()
@@ -114,9 +120,17 @@ fun LoginScreen(
             value = password,
             onValueChange = { password = it },
             label = { Text(Strings.password()) },
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             singleLine = true,
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                    )
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
 

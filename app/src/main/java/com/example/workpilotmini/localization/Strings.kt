@@ -97,7 +97,6 @@ object Strings {
     fun statNotCheckedInLabel() = t("Not Checked In", "Not Checked In")
     fun statTodaysVisitsLabel() = t("আজকের ভিজিট", "Today's Visits")
     fun percentOfTotal(percent: Int) = t("$percent%", "$percent%")
-    fun searchMembersPlaceholder() = t("নাম, মোবাইল বা লোকেশন দিয়ে খুঁজুন...", "Search by name, mobile or location...")
     fun filterAllCount(count: Int) = t("সব ($count)", "All ($count)")
     fun filterCheckedInCount(count: Int) = t("Checked In ($count)", "Checked In ($count)")
     fun filterNotCheckedInCount(count: Int) = t("Not Checked In ($count)", "Not Checked In ($count)")
@@ -248,6 +247,25 @@ object Strings {
     fun deleteConfirmMessage(name: String) =
         t("$name -কে টিম থেকে সরিয়ে তার প্রোফাইল ডিলিট করা হবে। এই কাজ Undo করা যাবে না।",
             "$name will be removed from the team and their profile deleted. This can't be undone.")
+
+    // Team manage — dashboard-style redesign
+    fun teamOverviewSubtitleAdmin() = t("সব টিম মেম্বারদের ওভারভিউ", "All team members' overview")
+    fun teamOwnerTag() = t("টিম মালিক", "Team Owner")
+    fun totalMembersLabel() = t("মোট মেম্বার", "Total Members")
+    fun viewAllInline() = t("সব দেখুন", "View all")
+    fun inviteCodeManageTitle() = t("Invite Code (শেয়ার করার জন্য)", "Invite Code (to share)")
+    fun shareAction() = t("শেয়ার", "Share")
+    fun shareInviteCodeMessage(teamName: String, code: String) =
+        t("'$teamName' টিমে যোগ দিতে WorkPilot Mini অ্যাপে এই ইনভাইট কোড ব্যবহার করুন: $code",
+            "Use this invite code to join '$teamName' on WorkPilot Mini: $code")
+    fun searchMembersPlaceholder() = t("নাম বা ইমেইল দিয়ে খুঁজুন...", "Search by name or email...")
+    fun teamMembersHeaderCount(count: Int) = t("টিম মেম্বার ($count)", "Team Members ($count)")
+    fun addMemberButtonLabel() = t("মেম্বার যোগ করুন", "Add Member")
+    fun addMemberSheetTitle() = t("মেম্বার যোগ করুন", "Add Member")
+    fun cannotAddMembersTitle() = t("আপনি মেম্বার যোগ করতে পারবেন না", "You can't add members")
+    fun cannotAddMembersSubtitle() = t("শুধু টিম Admin নতুন মেম্বার যোগ করতে পারবে।", "Only team admin can add new members.")
+    fun joinedInline(date: String) = t("যোগদান $date", "Joined $date")
+    fun memberActionsDescription() = t("অ্যাকশন", "Actions")
 
     // Dashboard solo-mode tile
     fun soloModeTileTitle() = t("Solo মোডে আছেন", "You're in solo mode")
