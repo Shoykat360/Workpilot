@@ -26,5 +26,6 @@ data class UserProfile(
     // True once the user has been through (or explicitly skipped) the post-signup
     // "complete your profile" prompt, so we don't nag them again on every login.
     val profileCompleted: Boolean = false,
+    val termsAcceptedAt: Long = 0L,
     val createdAt: Long = System.currentTimeMillis()
 )

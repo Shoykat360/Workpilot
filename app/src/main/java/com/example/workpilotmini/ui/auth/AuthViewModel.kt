@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import android.util.Patterns
+import com.example.workpilotmini.localization.Strings
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 
 data class AuthUiState(
@@ -51,18 +52,22 @@ class AuthViewModel : ViewModel() {
                 emailRegex.matches(trimmed)
     }
 
-    fun signUp(name: String, email: String, password: String) {
+    fun signUp(name: String, email: String, password: String, termsAccepted: Boolean) {
         if (name.isBlank() || email.isBlank() || password.length < 6) {
-            _state.value = _state.value.copy(errorMessage = "নাম, ইমেইল দিন এবং পাসওয়ার্ড কমপক্ষে ৬ ক্যারেক্টার দিন")
+            _state.value = _state.value.copy(errorMessage = Strings.signUpRequiredFieldsError())
             return
         }
         if (!isValidEmail(email)) {
-            _state.value = _state.value.copy(errorMessage = "সঠিক ইমেইল ঠিকানা দিন")
+            _state.value = _state.value.copy(errorMessage = Strings.invalidEmailError())
+            return
+        }
+        if (!termsAccepted) {
+            _state.value = _state.value.copy(errorMessage = Strings.termsRequiredError())
             return
         }
         _state.value = _state.value.copy(isLoading = true, errorMessage = null)
         viewModelScope.launch {
-            val result = repo.signUp(name, email, password)
+            val result = repo.signUp(name, email, password, System.currentTimeMillis())
             result.onSuccess {
                 _state.value = _state.value.copy(isLoading = false, profile = it, isLoggedIn = true, isCheckingAuth = false)
             }.onFailure {
@@ -73,12 +78,12 @@ class AuthViewModel : ViewModel() {
 
     fun login(email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
-            _state.value = _state.value.copy(errorMessage = "ইমেইল ও পাসওয়ার্ড দিন")
+            _state.value = _state.value.copy(errorMessage = Strings.emailPasswordRequiredError())
             return
         }
 
         if (!isValidEmail(email)) {
-            _state.value = _state.value.copy(errorMessage = "সঠিক ইমেইল ঠিকানা দিন")
+            _state.value = _state.value.copy(errorMessage = Strings.invalidEmailError())
             return
         }
         _state.value = _state.value.copy(isLoading = true, errorMessage = null)
@@ -97,7 +102,7 @@ class AuthViewModel : ViewModel() {
     fun sendPasswordReset(email: String) {
         val trimmed = email.trim()
         if (!isValidEmail(trimmed)) {
-            _state.value = _state.value.copy(errorMessage = "সঠিক ইমেইল ঠিকানা দিন")
+            _state.value = _state.value.copy(errorMessage = Strings.invalidEmailError())
             return
         }
         _state.value = _state.value.copy(isLoading = true, errorMessage = null, resetEmailSent = false)
@@ -107,7 +112,7 @@ class AuthViewModel : ViewModel() {
                 _state.value = _state.value.copy(isLoading = false, resetEmailSent = true)
             }.onFailure { e ->
                 if (e is FirebaseAuthInvalidUserException) {
-                    _state.value = _state.value.copy(isLoading = false, resetEmailSent = true)
+                    _state.value = _state.value.copy(isLoading = false, errorMessage = Strings.emailNotRegisteredError())
                 } else {
                     _state.value = _state.value.copy(isLoading = false, errorMessage = AppError.message(e))
                 }
@@ -160,7 +165,7 @@ class AuthViewModel : ViewModel() {
     fun updateProfile(name: String, mobile: String, address: String) {
         val uid = repo.currentUid ?: return
         if (name.isBlank()) {
-            _state.value = _state.value.copy(errorMessage = "নাম দিন")
+            _state.value = _state.value.copy(errorMessage = Strings.nameRequiredError())
             return
         }
         _state.value = _state.value.copy(isSavingProfile = true, errorMessage = null, profileSaved = false)
@@ -183,7 +188,7 @@ class AuthViewModel : ViewModel() {
     /** Changes the account password. Requires a recent login on Firebase's side. */
     fun updatePassword(newPassword: String, confirmPassword: String) {
         if (newPassword != confirmPassword) {
-            _state.value = _state.value.copy(errorMessage = "দুইটি পাসওয়ার্ড মিলছে না")
+            _state.value = _state.value.copy(errorMessage = Strings.passwordMismatchError())
             return
         }
         _state.value = _state.value.copy(isSavingProfile = true, errorMessage = null, profileSaved = false)

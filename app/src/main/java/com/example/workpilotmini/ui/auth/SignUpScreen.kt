@@ -7,6 +7,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -29,8 +30,30 @@ fun SignUpScreen(
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
+    var termsAccepted by remember { mutableStateOf(false) }
+    var showTermsDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(state.isLoggedIn) {
         if (state.isLoggedIn) onSignedUp()
+    }
+
+    if (showTermsDialog) {
+        AlertDialog(
+            onDismissRequest = { showTermsDialog = false },
+            title = { Text(Strings.termsTitle()) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(Strings.termsBody())
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTermsDialog = false }) { Text(Strings.ok()) }
+            }
+        )
     }
 
     Column(
@@ -78,6 +101,17 @@ fun SignUpScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = termsAccepted, onCheckedChange = { termsAccepted = it })
+            Text(Strings.termsAcceptPrefix())
+            Text(
+                Strings.termsLinkText(),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { showTermsDialog = true }
+            )
+        }
+
         state.errorMessage?.let {
             Spacer(Modifier.height(8.dp))
             Text(it, color = MaterialTheme.colorScheme.error)
@@ -85,8 +119,8 @@ fun SignUpScreen(
 
         Spacer(Modifier.height(20.dp))
         Button(
-            onClick = { viewModel.signUp(name.trim(), email.trim(), password) },
-            enabled = !state.isLoading,
+            onClick = { viewModel.signUp(name.trim(), email.trim(), password, termsAccepted) },
+            enabled = !state.isLoading && termsAccepted,
             modifier = Modifier.fillMaxWidth()
         ) {
             if (state.isLoading) {

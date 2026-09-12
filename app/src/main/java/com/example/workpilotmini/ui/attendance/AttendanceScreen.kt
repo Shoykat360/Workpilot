@@ -1,7 +1,12 @@
 package com.example.workpilotmini.ui.attendance
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -23,10 +28,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,10 +54,15 @@ import com.example.workpilotmini.ui.theme.AccentViolet
 import com.example.workpilotmini.ui.theme.AccentVioletBg
 import com.example.workpilotmini.ui.theme.BrandGradientEnd
 import com.example.workpilotmini.ui.theme.BrandGradientStart
+import kotlinx.coroutines.launch
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+// How long the user must hold the fingerprint circle before it fires (matches a
+// real fingerprint-scan feel, and prevents accidental taps from checking someone in/out).
+private const val HOLD_DURATION_MS = 2000
 
 @Composable
 fun AttendanceScreen(
@@ -162,78 +177,182 @@ private fun SelfCheckInOutSection(
     onCheckIn: () -> Unit,
     onCheckOut: () -> Unit
 ) {
+    // Hoisted here so both the admin's compact card and the member's fingerprint
+    // circle share the exact same confirm-before-you-commit flow.
+    var showConfirmCheckIn by remember { mutableStateOf(false) }
+    var showConfirmCheckOut by remember { mutableStateOf(false) }
+
+    if (showConfirmCheckIn) {
+        LocationConfirmDialog(
+            title = Strings.confirmCheckInTitle(),
+            message = Strings.confirmCheckInMessage(),
+            lat = state.capturedLat,
+            lng = state.capturedLng,
+            coordFormat = coordFormat,
+            onConfirm = { showConfirmCheckIn = false; onCheckIn() },
+            onDismiss = { showConfirmCheckIn = false }
+        )
+    }
+    if (showConfirmCheckOut) {
+        LocationConfirmDialog(
+            title = Strings.confirmCheckOutTitle(),
+            message = Strings.confirmCheckOutMessage(),
+            lat = state.capturedLat,
+            lng = state.capturedLng,
+            coordFormat = coordFormat,
+            onConfirm = { showConfirmCheckOut = false; onCheckOut() },
+            onDismiss = { showConfirmCheckOut = false }
+        )
+    }
+
     if (isAdmin) {
         AdminSelfStatusCard(
             state = state,
             timeFormat = timeFormat,
-            onCheckIn = onCheckIn,
-            onCheckOut = onCheckOut
+            onCheckIn = { showConfirmCheckIn = true },
+            onCheckOut = { showConfirmCheckOut = true }
         )
         return
     }
 
     // ---- Full member-facing design (fingerprint circle, location, summary, activity) ----
     if (!state.checkedInToday || !state.checkedOutToday) {
-        LocationStatusCard(state = state, onRetry = onRetryLocation)
+        LocationStatusCard(state = state, coordFormat = coordFormat, onRetry = onRetryLocation)
         Spacer(Modifier.height(16.dp))
     }
 
     when {
-        !state.checkedInToday -> BigActionCircle(
+        !state.checkedInToday -> HoldToConfirmCircle(
             icon = Icons.Filled.Fingerprint,
             isLoading = state.isLoading,
             enabled = !state.isLoading,
-            onClick = onCheckIn
+            onHoldComplete = { showConfirmCheckIn = true }
         )
-        !state.checkedOutToday -> BigActionCircle(
+        !state.checkedOutToday -> HoldToConfirmCircle(
             icon = Icons.Filled.Logout,
             isLoading = state.isCheckingOut,
             enabled = !state.isCheckingOut,
-            onClick = onCheckOut
+            onHoldComplete = { showConfirmCheckOut = true }
         )
         else -> DoneBanner()
     }
 
     if (!state.checkedInToday || !state.checkedOutToday) {
         Spacer(Modifier.height(10.dp))
-        Text(
+        /*Text(
             Strings.tapToCheckInOutHint(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
-        )
+        )*/
     }
 
     Spacer(Modifier.height(20.dp))
     AttendanceSummaryRow(record = state.myRecord, timeFormat = timeFormat)
 
     Spacer(Modifier.height(16.dp))
-    AttendanceMotivationBanner()
+    //AttendanceMotivationBanner()
 
     if (state.myRecord != null) {
         Spacer(Modifier.height(16.dp))
-        TodaysActivityCard(record = state.myRecord!!, timeFormat = timeFormat)
+        TodaysActivityCard(record = state.myRecord!!, timeFormat = timeFormat, coordFormat = coordFormat)
     }
 }
 
+/** Shown right before a check-in/check-out actually commits — lets the person see
+ *  (and, if they want, verify on a map) the exact location that will be saved. */
 @Composable
-private fun LocationStatusCard(state: AttendanceUiState, onRetry: () -> Unit) {
-    val coordFormat = remember { DecimalFormat("0.00000") }
+private fun LocationConfirmDialog(
+    title: String,
+    message: String,
+    lat: Double?,
+    lng: Double?,
+    coordFormat: DecimalFormat,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(message)
+                if (lat != null && lng != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(AccentBlueBg)
+                            .clickable {
+                                uriHandler.openUri("https://www.google.com/maps/search/?api=1&query=$lat,$lng")
+                            }
+                            .padding(12.dp)
+                    ) {
+                        Icon(Icons.Filled.LocationOn, contentDescription = null, tint = AccentBlue)
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(Strings.capturedLocationLabel(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "${coordFormat.format(lat)}, ${coordFormat.format(lng)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AccentBlue
+                            )
+                            Text(Strings.viewOnMap(), style = MaterialTheme.typography.labelSmall, color = AccentBlue)
+                        }
+                    }
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        Strings.locationNotFound(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(Strings.confirm()) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(Strings.cancel()) }
+        }
+    )
+}
+
+@Composable
+private fun LocationStatusCard(state: AttendanceUiState, coordFormat: DecimalFormat, onRetry: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    val hasCoords = state.capturedLat != null && state.capturedLng != null
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .let {
+                    if (hasCoords) it.clickable {
+                        uriHandler.openUri("https://www.google.com/maps/search/?api=1&query=${state.capturedLat},${state.capturedLng}")
+                    } else it
+                }
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
                 Text(Strings.currentLocationLabel(), style = MaterialTheme.typography.labelMedium)
                 when {
                     state.isLocating -> Text(Strings.locating(), style = MaterialTheme.typography.bodyMedium)
-                    state.capturedLat != null && state.capturedLng != null -> Text(
-                        "${coordFormat.format(state.capturedLat)}, ${coordFormat.format(state.capturedLng)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    hasCoords -> Column {
+                        Text(
+                            "${coordFormat.format(state.capturedLat)}, ${coordFormat.format(state.capturedLng)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(Strings.viewOnMap(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
                     state.locationError != null -> Text(
                         state.locationError!!,
                         style = MaterialTheme.typography.bodySmall,
@@ -251,10 +370,18 @@ private fun LocationStatusCard(state: AttendanceUiState, onRetry: () -> Unit) {
     }
 }
 
-/** The big tappable circle from the reference design — used for both check-in and
- *  check-out (icon changes: fingerprint to check in, logout arrow to check out). */
+/** The big fingerprint-style circle. Instead of a plain tap, the user must press and
+ *  hold for [HOLD_DURATION_MS] — a thin ring fills in around the icon while held (like
+ *  a fingerprint scan), a short haptic pulse confirms the hold completed, and only then
+ *  does it hand off to the confirmation dialog. Releasing early cancels and resets. */
 @Composable
-private fun BigActionCircle(icon: ImageVector, isLoading: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun HoldToConfirmCircle(icon: ImageVector, isLoading: Boolean, enabled: Boolean, onHoldComplete: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val progress = remember { Animatable(0f) }
+    val haptic = LocalHapticFeedback.current
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(targetValue = if (isPressed) 0.94f else 1f, animationSpec = tween(150), label = "holdScale")
+
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
@@ -263,12 +390,40 @@ private fun BigActionCircle(icon: ImageVector, isLoading: Boolean, enabled: Bool
                 .background(BrandGradientStart.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
+            if (isPressed) {
+                CircularProgressIndicator(
+                    progress = progress.value,
+                    modifier = Modifier.size(200.dp),
+                    strokeWidth = 5.dp,
+                    color = BrandGradientEnd,
+                    trackColor = Color.Transparent
+                )
+            }
             Box(
                 modifier = Modifier
                     .size(160.dp)
+                    .scale(scale)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(listOf(BrandGradientStart, BrandGradientEnd)))
-                    .clickable(enabled = enabled, onClick = onClick),
+                    .pointerInput(enabled) {
+                        if (!enabled) return@pointerInput
+                        detectTapGestures(
+                            onPress = {
+                                isPressed = true
+                                val holdJob = scope.launch {
+                                    progress.snapTo(0f)
+                                    progress.animateTo(1f, animationSpec = tween(HOLD_DURATION_MS, easing = LinearEasing))
+                                    // Only reached if the press was held for the full duration.
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onHoldComplete()
+                                }
+                                tryAwaitRelease()
+                                holdJob.cancel()
+                                isPressed = false
+                                scope.launch { progress.animateTo(0f, animationSpec = tween(200)) }
+                            }
+                        )
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 if (isLoading) {
@@ -279,7 +434,7 @@ private fun BigActionCircle(icon: ImageVector, isLoading: Boolean, enabled: Bool
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text(Strings.tapToCheckInOut(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+       // Text(Strings.holdToCheckInOut(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -300,11 +455,16 @@ private fun DoneBanner() {
 
 @Composable
 private fun AttendanceSummaryRow(record: AttendanceRecord?, timeFormat: SimpleDateFormat) {
+    val uriHandler = LocalUriHandler.current
     val (statusText, statusColor) = when {
         record?.checkOutTime != null -> Strings.statusCheckedOut() to AccentBlue
         record != null -> Strings.statusCheckedIn() to AccentGreen
         else -> Strings.statusNotCheckedIn() to AccentOrange
     }
+    // Location column opens the check-in point on the map when available; otherwise
+    // it's not clickable and just reads "Not yet" like the other columns.
+    val hasLocation = record?.lat != null && record.lng != null
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -322,7 +482,11 @@ private fun AttendanceSummaryRow(record: AttendanceRecord?, timeFormat: SimpleDa
             modifier = Modifier.weight(1f),
             icon = Icons.Filled.LocationOn,
             label = Strings.locationSummaryLabel(),
-            value = if (record?.lat != null) Strings.statusCheckedIn() else Strings.notYet()
+            value = if (hasLocation) Strings.viewOnMap() else Strings.notYet(),
+            valueColor = if (hasLocation) AccentBlue else null,
+            onClick = if (hasLocation) {
+                { uriHandler.openUri("https://www.google.com/maps/search/?api=1&query=${record!!.lat},${record.lng}") }
+            } else null
         )
         Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(Strings.statusSummaryLabel(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -340,12 +504,30 @@ private fun AttendanceSummaryRow(record: AttendanceRecord?, timeFormat: SimpleDa
 }
 
 @Composable
-private fun SummaryColumn(modifier: Modifier = Modifier, icon: ImageVector, label: String, value: String) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+private fun SummaryColumn(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    label: String,
+    value: String,
+    valueColor: Color? = null,
+    onClick: (() -> Unit)? = null
+) {
+    Column(
+        modifier = modifier
+            .let { if (onClick != null) it.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick) else it }
+            .padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         Spacer(Modifier.height(4.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            color = valueColor ?: MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -361,15 +543,16 @@ private fun AttendanceMotivationBanner() {
     ) {
         Icon(Icons.Filled.LocationOn, contentDescription = null, tint = AccentBlue)
         Spacer(Modifier.width(12.dp))
-        Column {
+        /*Column {
             Text(Strings.attendanceBannerTitle(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(Strings.attendanceBannerSubtitle(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        }*/
     }
 }
 
 @Composable
-private fun TodaysActivityCard(record: AttendanceRecord, timeFormat: SimpleDateFormat) {
+private fun TodaysActivityCard(record: AttendanceRecord, timeFormat: SimpleDateFormat, coordFormat: DecimalFormat) {
+    val uriHandler = LocalUriHandler.current
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -381,9 +564,17 @@ private fun TodaysActivityCard(record: AttendanceRecord, timeFormat: SimpleDateF
             }
             Spacer(Modifier.height(10.dp))
             ActivityRow(dotColor = AccentGreen, label = Strings.checkInActivityLabel(), time = timeFormat.format(Date(record.checkInTime)))
+            if (record.lat != null && record.lng != null) {
+                Spacer(Modifier.height(4.dp))
+                MapLinkRow(lat = record.lat, lng = record.lng, coordFormat = coordFormat, uriHandler = uriHandler)
+            }
             record.checkOutTime?.let {
                 Spacer(Modifier.height(8.dp))
                 ActivityRow(dotColor = AccentBlue, label = Strings.checkOutActivityLabel(), time = timeFormat.format(Date(it)))
+                if (record.outLat != null && record.outLng != null) {
+                    Spacer(Modifier.height(4.dp))
+                    MapLinkRow(lat = record.outLat, lng = record.outLng, coordFormat = coordFormat, uriHandler = uriHandler)
+                }
             }
         }
     }
@@ -419,7 +610,9 @@ private fun AdminBadge() {
 }
 
 /** Compact self check-in/out card shown to the admin — same underlying action as the
- *  member's big circle, just condensed so it doesn't crowd out the team stats below. */
+ *  member's big circle, just condensed so it doesn't crowd out the team stats below.
+ *  Tapping the button here opens the same confirmation dialog as the member circle
+ *  (hoisted in SelfCheckInOutSection) rather than committing immediately. */
 @Composable
 private fun AdminSelfStatusCard(
     state: AttendanceUiState,
@@ -615,6 +808,7 @@ private fun FilterChipsRow(state: AttendanceUiState, onFilterChange: (Attendance
 
 @Composable
 private fun MemberAttendanceCard(row: MemberAttendanceRow, timeFormat: SimpleDateFormat, coordFormat: DecimalFormat) {
+    val uriHandler = LocalUriHandler.current
     val record = row.record
     val (statusText, statusColor) = if (record != null) {
         if (record.checkOutTime != null) Strings.statusCheckedOut() to AccentBlue
@@ -624,55 +818,116 @@ private fun MemberAttendanceCard(row: MemberAttendanceRow, timeFormat: SimpleDat
     }
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(BrandGradientStart.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(initials(row.profile.name), fontWeight = FontWeight.Bold, color = BrandGradientStart)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(row.profile.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                if (row.profile.address.isNotBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.width(2.dp))
-                        Text(row.profile.address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else if (row.profile.mobile.isNotBlank()) {
-                    Text(row.profile.mobile, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Column(horizontalAlignment = Alignment.End) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(statusColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(BrandGradientStart.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(statusText, style = MaterialTheme.typography.labelSmall, color = statusColor, fontWeight = FontWeight.SemiBold)
+                    Text(initials(row.profile.name), fontWeight = FontWeight.Bold, color = BrandGradientStart)
                 }
-                if (record != null) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        Strings.checkInTimeInline(timeFormat.format(Date(record.checkInTime))),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    record.checkOutTime?.let {
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(row.profile.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    if (row.profile.address.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.width(2.dp))
+                            Text(row.profile.address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else if (row.profile.mobile.isNotBlank()) {
+                        Text(row.profile.mobile, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(statusColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(statusText, style = MaterialTheme.typography.labelSmall, color = statusColor, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (record != null) {
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            Strings.checkOutTimeInline(timeFormat.format(Date(it))),
+                            Strings.checkInTimeInline(timeFormat.format(Date(record.checkInTime))),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        record.checkOutTime?.let {
+                            Text(
+                                Strings.checkOutTimeInline(timeFormat.format(Date(it))),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
+
+            // Tap either recorded GPS point to open it directly in Google Maps — lets the
+            // admin quickly verify a check-in/check-out actually happened where expected.
+            // NOTE: must null-check `record` itself first (not `record?.lat`) so Kotlin can
+            // smart-cast it to non-null for the rest of the block — the previous version
+            // checked `record?.lat != null` which does NOT smart-cast `record`, so
+            // `record.lng` right after failed to compile and silently broke this feature.
+            if (record != null) {
+                if (record.lat != null && record.lng != null) {
+                    Spacer(Modifier.height(8.dp))
+                    MapLinkRow(
+                        label = Strings.checkInActivityLabel(),
+                        lat = record.lat,
+                        lng = record.lng,
+                        coordFormat = coordFormat,
+                        uriHandler = uriHandler
+                    )
+                }
+                if (record.outLat != null && record.outLng != null) {
+                    Spacer(Modifier.height(6.dp))
+                    MapLinkRow(
+                        label = Strings.checkOutActivityLabel(),
+                        lat = record.outLat,
+                        lng = record.outLng,
+                        coordFormat = coordFormat,
+                        uriHandler = uriHandler
+                    )
+                }
+            }
         }
+    }
+}
+
+/** One tappable "lat, lng — View on map" row, reused for check-in and check-out
+ *  locations everywhere they're shown (member's own activity card, admin's member list). */
+@Composable
+private fun MapLinkRow(
+    lat: Double,
+    lng: Double,
+    coordFormat: DecimalFormat,
+    uriHandler: androidx.compose.ui.platform.UriHandler,
+    label: String? = null
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { uriHandler.openUri("https://www.google.com/maps/search/?api=1&query=$lat,$lng") }
+            .padding(vertical = 4.dp)
+    ) {
+        Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(14.dp), tint = AccentBlue)
+        Spacer(Modifier.width(4.dp))
+        Text(
+            (if (label != null) "$label: " else "") + "${coordFormat.format(lat)}, ${coordFormat.format(lng)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = AccentBlue,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(Strings.viewOnMap(), style = MaterialTheme.typography.labelSmall, color = AccentBlue)
     }
 }
 

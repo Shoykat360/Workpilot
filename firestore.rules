@@ -33,9 +33,13 @@ service cloud.firestore {
     }
 
     // Only fields the client may ever change on a user profile.
+    // termsAcceptedAt is included here (not just identity fields) so that once
+    // recorded at sign-up, it can never be silently rewritten by any later update —
+    // it's a permanent audit record of consent.
     function unchangedIdentityFields() {
       return request.resource.data.uid == resource.data.uid &&
-             request.resource.data.email == resource.data.email;
+             request.resource.data.email == resource.data.email &&
+             request.resource.data.termsAcceptedAt == resource.data.termsAcceptedAt;
     }
 
     match /users/{uid} {
@@ -50,24 +54,29 @@ service cloud.firestore {
         (resource.data.teamId == '' && isAnyTeamAdmin())
       );
 
+      // Create: must self-create as a plain, teamless member — and must prove
+      // Terms & Conditions consent with a real timestamp (not 0, not a future date's
+      // worth of clock skew accepted as "greater than 0").
       allow create: if isSignedIn() &&
         myUid() == uid &&
         request.resource.data.uid == uid &&
         request.resource.data.role == 'member' &&
-        request.resource.data.teamId == '';
+        request.resource.data.teamId == '' &&
+        request.resource.data.termsAcceptedAt is number &&
+        request.resource.data.termsAcceptedAt > 0;
 
       // Self-service profile edit: name / mobile / address / soloMode / profileCompleted
-      // only — role, teamId and isActive must stay exactly as they were. This is the
-      // Profile screen's "save" and the "use individually" action.
+      // only — role, teamId, isActive and termsAcceptedAt must stay exactly as they were.
+      // This is the Profile screen's "save" and the "use individually" action.
       allow update: if isSignedIn() && myUid() == uid && unchangedIdentityFields() &&
         request.resource.data.role == resource.data.role &&
         request.resource.data.teamId == resource.data.teamId &&
         request.resource.data.isActive == resource.data.isActive;
 
-      // Update: only your own doc, cannot touch uid/email, and role/teamId
-      // may only be set to values that match a team you are legitimately
-      // becoming admin of (just created) or already a listed member of
-      // (just joined) — this closes the "self-promote to admin" hole.
+      // Update: only your own doc, cannot touch uid/email/termsAcceptedAt, and
+      // role/teamId may only be set to values that match a team you are legitimately
+      // becoming admin of (just created) or already a listed member of (just joined) —
+      // this closes the "self-promote to admin" hole.
       allow update: if isSignedIn() && myUid() == uid && unchangedIdentityFields() && (
         (
           request.resource.data.role == 'admin' &&

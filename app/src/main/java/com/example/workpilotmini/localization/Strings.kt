@@ -70,7 +70,7 @@ object Strings {
     fun checkOutNow() = t("এখন Check-out করুন", "Check out now")
     fun checkOutDone() = t("আজ আপনার check-out সম্পন্ন হয়েছে ✅", "Your check-out for today is done ✅")
     fun tapToCheckInOut() = t("Check In / Out করতে ট্যাপ করুন", "Tap to Check In / Out")
-    fun tapToCheckInOutHint() = t("আপনার লোকেশন স্বয়ংক্রিয়ভাবে সংরক্ষিত হবে", "Your location will be captured automatically")
+    //fun tapToCheckInOutHint() = t("আপনার লোকেশন স্বয়ংক্রিয়ভাবে সংরক্ষিত হবে", "Your location will be captured automatically")
     fun onlineLabel() = t("অনলাইন", "Online")
     fun teamCheckedInToday(count: Int) = t("আজকে টিমে যারা Check-in করেছে ($count)", "Checked in today ($count)")
 
@@ -82,8 +82,8 @@ object Strings {
     fun statusCheckedIn() = t("Checked In", "Checked In")
     fun statusCheckedOut() = t("Checked Out", "Checked Out")
     fun statusNotCheckedIn() = t("Not Checked In", "Not Checked In")
-    fun attendanceBannerTitle() = t("আপনার Attendance গুরুত্বপূর্ণ", "Your attendance is important")
-    fun attendanceBannerSubtitle() = t("নিয়মিত থাকুন। সাফল্য তৈরি করুন।", "Stay consistent. Build your success.")
+   // fun attendanceBannerTitle() = t("আপনার Attendance গুরুত্বপূর্ণ", "Your attendance is important")
+   // fun attendanceBannerSubtitle() = t("নিয়মিত থাকুন। সাফল্য তৈরি করুন।", "Stay consistent. Build your success.")
     fun todaysActivityHeader() = t("আজকের কার্যক্রম", "Today's Activity")
     fun viewAll() = t("সব দেখুন", "View All")
     fun checkInActivityLabel() = t("Check-in", "Check-in")
@@ -349,4 +349,96 @@ object Strings {
     fun statVisitTodayLabel() = t("Visit Today", "Visit Today")
     fun statTeamMembersLabel() = t("Team Members", "Team Members")
     fun statProductivityLabel() = t("Productivity", "Productivity")
+
+    // Auth validation errors
+    fun invalidEmailError() = t("সঠিক ইমেইল ঠিকানা দিন", "Enter a valid email address")
+    fun emailPasswordRequiredError() = t("ইমেইল ও পাসওয়ার্ড দিন", "Enter email and password")
+    fun signUpRequiredFieldsError() = t("নাম, ইমেইল দিন এবং পাসওয়ার্ড কমপক্ষে ৬ ক্যারেক্টার দিন", "Enter name, email, and a password of at least 6 characters")
+    fun passwordMismatchError() = t("দুইটি পাসওয়ার্ড মিলছে না", "Passwords don't match")
+    fun nameRequiredError() = t("নাম দিন", "Enter your name")
+    fun emailNotRegisteredError() = t("এই ইমেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি", "No account found with this email")
+
+
+    // Common
+    fun confirm() = t("নিশ্চিত করুন", "Confirm")
+
+    // Attendance — hold-to-confirm + location confirm dialog
+   // fun holdToCheckInOut() = t("Check In / Out করতে ২ সেকেন্ড চেপে ধরুন", "Hold for 2 seconds to Check In / Out")
+    fun confirmCheckInTitle() = t("Check-in নিশ্চিত করুন", "Confirm Check-in")
+    fun confirmCheckOutTitle() = t("Check-out নিশ্চিত করুন", "Confirm Check-out")
+    fun confirmCheckInMessage() = t("আপনি কি এখন Check-in করতে চান?", "Do you want to check in now?")
+    fun confirmCheckOutMessage() = t("আপনি কি এখন Check-out করতে চান?", "Do you want to check out now?")
+    fun capturedLocationLabel() = t("আপনার লোকেশন", "Your location")
+    fun viewOnMap() = t("ম্যাপে দেখুন", "View on map")
+
+
+
+
+    // Terms & Conditions
+    fun termsAcceptPrefix() = t("আমি সম্মত ", "I agree to the ")
+    fun termsLinkText() = t("শর্তাবলী ও গোপনীয়তা নীতি", "Terms & Conditions")
+    fun termsRequiredError() = t("চালিয়ে যেতে শর্তাবলী মেনে নিতে হবে", "You must accept the Terms & Conditions to continue")
+    fun termsTitle() = t("শর্তাবলী ও গোপনীয়তা নীতি", "Terms & Conditions")
+    fun termsBody() = t(
+        """
+১. সাধারণ
+WorkPilot Mini (\"অ্যাপ\") ব্যবহার করে নিবন্ধন করার মাধ্যমে আপনি নিচের শর্তাবলীতে সম্মত হচ্ছেন।
+
+২. সংগৃহীত তথ্য
+আমরা আপনার নাম, ইমেইল, মোবাইল নম্বর ও ঠিকানা (ঐচ্ছিক) সংগ্রহ করি অ্যাকাউন্ট তৈরির জন্য।
+
+৩. লোকেশন ডেটা
+Attendance check-in/check-out এবং Visit Entry দেওয়ার সময় আপনার GPS লোকেশন (latitude/longitude) সংগ্রহ ও সংরক্ষণ করা হয়, শুধুমাত্র উপস্থিতি ও ভিজিট রেকর্ড যাচাইয়ের উদ্দেশ্যে।
+
+৪. টিম ডেটা শেয়ারিং
+আপনি যদি কোনো টিমে join করেন, আপনার Attendance, Visit Entry ও Reminder তথ্য সেই টিমের Admin দেখতে পারবেন। Admin আপনার অ্যাকাউন্ট নিষ্ক্রিয় (deactivate) বা টিম থেকে অপসারণ করতে পারবেন।
+
+৫. ডেটা ব্যবহার
+সংগৃহীত তথ্য শুধুমাত্র অ্যাপের মূল কার্যক্রম (attendance tracking, visit logging, reporting) পরিচালনার জন্য ব্যবহার করা হয়। তৃতীয় পক্ষের কাছে বিক্রি করা হয় না।
+
+৬. অ্যাকাউন্ট নিরাপত্তা
+আপনার পাসওয়ার্ড গোপন রাখার দায়িত্ব আপনার। সন্দেহজনক কার্যকলাপ দেখলে অবিলম্বে পাসওয়ার্ড পরিবর্তন করুন।
+
+৭. ডেটা সংরক্ষণ ও মুছে ফেলা
+অ্যাকাউন্ট সক্রিয় থাকাকালীন ডেটা সংরক্ষিত থাকে। অ্যাকাউন্ট মুছে ফেলার অনুরোধ করলে যুক্তিসঙ্গত সময়ের মধ্যে তথ্য মুছে ফেলা হবে।
+
+৮. পরিবর্তন
+এই শর্তাবলী যেকোনো সময় পরিবর্তিত হতে পারে। বড় পরিবর্তন হলে অ্যাপের মাধ্যমে জানানো হবে।
+
+৯. যোগাযোগ
+কোনো প্রশ্ন থাকলে আপনার প্রতিষ্ঠানের Admin এর সাথে যোগাযোগ করুন।
+    """.trimIndent(),
+        """
+1. General
+By registering on WorkPilot Mini ("the App"), you agree to the terms below.
+
+2. Information We Collect
+We collect your name, email, mobile number, and address (optional) to create your account.
+
+3. Location Data
+When you check in/out for attendance or log a Visit Entry, your GPS location (latitude/longitude) is collected and stored, solely to verify attendance and visit records.
+
+4. Team Data Sharing
+If you join a team, your Attendance, Visit Entry, and Reminder data are visible to that team's Admin. The Admin may deactivate your account or remove you from the team.
+
+5. Use of Data
+Collected data is used only to operate the app's core features (attendance tracking, visit logging, reporting). It is never sold to third parties.
+
+6. Account Security
+You are responsible for keeping your password confidential. Change it immediately if you notice suspicious activity.
+
+7. Data Retention & Deletion
+Data is retained while your account is active. If you request account deletion, your data will be removed within a reasonable time.
+
+8. Changes
+These terms may change at any time. Significant changes will be communicated within the app.
+
+9. Contact
+For questions, please contact your organization's Admin.
+    """.trimIndent()
+    )
+
+
+
+
 }

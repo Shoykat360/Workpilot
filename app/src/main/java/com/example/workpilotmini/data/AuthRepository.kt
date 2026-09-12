@@ -9,11 +9,15 @@ class AuthRepository {
 
     val currentUid: String? get() = auth.currentUser?.uid
 
-    suspend fun signUp(name: String, email: String, password: String): Result<UserProfile> = runCatching {
+    suspend fun signUp(name: String, email: String, password: String, termsAcceptedAt: Long): Result<UserProfile> = runCatching {
         val result = auth.createUserWithEmailAndPassword(email, password).await()
         val uid = result.user?.uid ?: error("Sign up failed: no uid returned")
-        // Stored lowercase so admin "add member by email" lookups match regardless of casing.
-        val profile = UserProfile(uid = uid, name = name, email = email.trim().lowercase())
+        val profile = UserProfile(
+            uid = uid,
+            name = name,
+            email = email.trim().lowercase(),
+            termsAcceptedAt = termsAcceptedAt
+        )
         usersCol.document(uid).set(profile).await()
         profile
     }
