@@ -63,12 +63,12 @@ object Strings {
 
     // Attendance
     fun attendanceHeader() = t("Attendance", "Attendance")
-    fun attendanceSubtitleMember() = t("দৈনিক কাজের জন্য Check in & out করুন", "Check in & out for your daily work")
+   // fun attendanceSubtitleMember() = t("দৈনিক কাজের জন্য Check in & out করুন", "Check in & out for your daily work")
     fun attendanceSubtitleAdmin() = t("টিমের Check-in & Check-out", "Team check-in & check-out")
-    fun checkInDone() = t("আজ আপনার check-in সম্পন্ন হয়েছে ✅", "Your check-in for today is done ✅")
+   // fun checkInDone() = t("আজ আপনার check-in সম্পন্ন হয়েছে ✅", "Your check-in for today is done ✅")
     fun checkInNow() = t("এখন Check-in করুন", "Check in now")
     fun checkOutNow() = t("এখন Check-out করুন", "Check out now")
-    fun checkOutDone() = t("আজ আপনার check-out সম্পন্ন হয়েছে ✅", "Your check-out for today is done ✅")
+   // fun checkOutDone() = t("আজ আপনার check-out সম্পন্ন হয়েছে ✅", "Your check-out for today is done ✅")
     fun tapToCheckInOut() = t("Check In / Out করতে ট্যাপ করুন", "Tap to Check In / Out")
     //fun tapToCheckInOutHint() = t("আপনার লোকেশন স্বয়ংক্রিয়ভাবে সংরক্ষিত হবে", "Your location will be captured automatically")
     fun onlineLabel() = t("অনলাইন", "Online")

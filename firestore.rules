@@ -140,13 +140,15 @@ service cloud.firestore {
           request.resource.data.dateKey is string &&
           request.resource.data.checkInTime is number;
         // Attendance is otherwise an immutable audit trail — the one allowed edit is
-        // the owner checking themself out once: only checkOutTime/outLat/outLng may
-        // change, and only while checkOutTime is still null (can't check out twice).
+        // the owner checking themself out once: only checkOutTime/outLat/outLng/
+        // outAddress may change, and only while checkOutTime is still null (can't
+        // check out twice). outAddress added alongside outLat/outLng — the reverse-
+        // geocoded address is written at the same time as the coordinates.
         allow update: if isSignedIn() && myUid() == ownerUid &&
           resource.data.uid == myUid() &&
           resource.data.checkOutTime == null &&
           request.resource.data.checkOutTime is number &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkOutTime', 'outLat', 'outLng']);
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkOutTime', 'outLat', 'outLng', 'outAddress']);
       }
 
       match /visits/{visitId} {
@@ -190,12 +192,14 @@ service cloud.firestore {
           request.resource.data.checkInTime is number;
         // Attendance is otherwise an immutable audit trail — the one allowed edit is
         // the owner checking themself out once (admin included): only checkOutTime/
-        // outLat/outLng may change, and only while checkOutTime is still null.
+        // outLat/outLng/outAddress may change, and only while checkOutTime is still
+        // null. outAddress added alongside outLat/outLng — the reverse-geocoded
+        // address is written at the same time as the coordinates.
         allow update: if inTeam(teamId) &&
           resource.data.uid == myUid() &&
           resource.data.checkOutTime == null &&
           request.resource.data.checkOutTime is number &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkOutTime', 'outLat', 'outLng']);
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkOutTime', 'outLat', 'outLng', 'outAddress']);
       }
 
       match /visits/{visitId} {

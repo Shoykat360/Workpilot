@@ -38,7 +38,8 @@ class AttendanceRepository {
         uid: String,
         userName: String,
         lat: Double?,
-        lng: Double?
+        lng: Double?,
+        address: String? = null
     ): Result<Unit> = runCatching {
         // deterministic ID = same user + same day কখনোই দুইটা doc বানাতে পারবে না
         val docRef = attendanceCol(ownerId, isSolo).document("${uid}_${todayKey()}")
@@ -49,28 +50,31 @@ class AttendanceRepository {
             dateKey = todayKey(),
             checkInTime = System.currentTimeMillis(),
             lat = lat,
-            lng = lng
+            lng = lng,
+            address = address
         )
         docRef.set(record).await()
     }
 
     /** Marks today's check-in as checked out (fills [AttendanceRecord.checkOutTime]/
-     *  outLat/outLng on the same doc). Requires [checkIn] to have been called earlier
-     *  today — matches the `attendance` update rule, which only allows the author to
-     *  flip these three fields, and only once (checkOutTime must currently be null). */
+     *  outLat/outLng/outAddress on the same doc). Requires [checkIn] to have been called
+     *  earlier today — matches the `attendance` update rule, which only allows the author
+     *  to flip these fields, and only once (checkOutTime must currently be null). */
     suspend fun checkOut(
         ownerId: String,
         isSolo: Boolean,
         uid: String,
         lat: Double?,
-        lng: Double?
+        lng: Double?,
+        outAddress: String? = null
     ): Result<Unit> = runCatching {
         val docRef = attendanceCol(ownerId, isSolo).document("${uid}_${todayKey()}")
         docRef.update(
             mapOf(
                 "checkOutTime" to System.currentTimeMillis(),
                 "outLat" to lat,
-                "outLng" to lng
+                "outLng" to lng,
+                "outAddress" to outAddress
             )
         ).await()
     }

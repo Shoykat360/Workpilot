@@ -35,11 +35,18 @@ data class AttendanceUiState(
     val checkedOutToday: Boolean = false,
     val myRecord: AttendanceRecord? = null,
     val todayList: List<AttendanceRecord> = emptyList(),
+    val isLoadingMyRecord: Boolean = true,
     // GPS capture for the check-in/out button, shown live — same reasoning as visit entry:
     // silently fetching in the background gave no feedback when it failed.
     val isLocating: Boolean = false,
     val capturedLat: Double? = null,
     val capturedLng: Double? = null,
+    // Reverse-geocoded short address for capturedLat/capturedLng (e.g. "Gulshan, Dhaka").
+    // Resolved asynchronously *after* the coordinates land, so isLocating already flips
+    // to false as soon as we have a GPS fix — isResolvingAddress covers just the extra
+    // geocoding step, and the UI falls back to raw coordinates if this stays null.
+    val isResolvingAddress: Boolean = false,
+    val capturedAddress: String? = null,
     val locationError: String? = null,
     // Admin-only extras (dashboard-style stats + search/filter over the team list)
     val isLoadingTeam: Boolean = false,
@@ -86,11 +93,18 @@ class AttendanceViewModel : ViewModel() {
     private val teamRepo = TeamRepository()
     private val visitRepo = VisitRepository()
     private var listener: ListenerRegistration? = null
-
+    private var startedKey: String? = null
     private val _state = MutableStateFlow(AttendanceUiState())
     val state: StateFlow<AttendanceUiState> = _state.asStateFlow()
 
     fun start(ownerId: String, isSolo: Boolean, uid: String, isAdmin: Boolean, team: Team? = null) {
+        // Same owner/user coming back (tab switch) -> data is already here, don't show loader again.
+        val key = "$ownerId|$isSolo|$uid|$isAdmin"
+        if (startedKey != key) {
+            startedKey = key
+            _state.value = _state.value.copy(isLoadingMyRecord = true)
+        }
+
         listener?.remove()
         listener = repo.listenToTodayAttendance(ownerId, isSolo, uid, isAdmin) { list ->
             val mine = list.find { it.uid == uid }
@@ -98,7 +112,8 @@ class AttendanceViewModel : ViewModel() {
                 todayList = list,
                 checkedInToday = mine != null,
                 checkedOutToday = mine?.checkOutTime != null,
-                myRecord = mine
+                myRecord = mine,
+                isLoadingMyRecord = false
             )
         }
 
@@ -126,10 +141,18 @@ class AttendanceViewModel : ViewModel() {
     }
 
     /** Fetches a fresh GPS fix and shows it above the check-in button, so the user can see
-     *  the exact coordinates that will be saved with today's check-in/out. */
+     *  the exact location that will be saved with today's check-in/out. Coordinates land
+     *  first (isLocating -> false); the human-readable address is resolved right after in
+     *  the background (isResolvingAddress) and can end up null if geocoding fails — the UI
+     *  must always be able to fall back to the raw coordinates. */
     fun captureLocation(context: Context) {
-        _state.value = _state.value.copy(isLocating = true, locationError = null)
-        viewModelScope.launch {
+        _state.value = _state.value.copy(
+            isLocating = true,
+            locationError = null,
+            capturedAddress = null,
+            isResolvingAddress = false
+        )
+        viewModelScope.launch @androidx.annotation.RequiresPermission(allOf = [android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION]) {
             val helper = LocationHelper(context)
             if (!helper.hasLocationPermission()) {
                 _state.value = _state.value.copy(
@@ -153,8 +176,15 @@ class AttendanceViewModel : ViewModel() {
                     isLocating = false,
                     capturedLat = location.latitude,
                     capturedLng = location.longitude,
-                    locationError = null
+                    locationError = null,
+                    isResolvingAddress = true
                 )
+                val resolved = helper.getAddressFromLocation(location.latitude, location.longitude)
+                // Guard against a stale write: only apply this if the coordinates haven't
+                // moved on to a newer fix (e.g. user tapped Retry while this was resolving).
+                if (_state.value.capturedLat == location.latitude && _state.value.capturedLng == location.longitude) {
+                    _state.value = _state.value.copy(isResolvingAddress = false, capturedAddress = resolved)
+                }
             }
         }
     }
@@ -162,9 +192,10 @@ class AttendanceViewModel : ViewModel() {
     fun checkIn(context: Context, ownerId: String, isSolo: Boolean, uid: String, userName: String) {
         val lat = _state.value.capturedLat
         val lng = _state.value.capturedLng
+        val address = _state.value.capturedAddress
         _state.value = _state.value.copy(isLoading = true, errorMessage = null)
         viewModelScope.launch {
-            val result = repo.checkIn(ownerId, isSolo, uid, userName, lat, lng)
+            val result = repo.checkIn(ownerId, isSolo, uid, userName, lat, lng, address)
             result.onSuccess {
                 // checkedInToday/myRecord টাচ করছি না — listenToTodayAttendance listener-ই
                 // একমাত্র জায়গা যেটা এই state আপডেট করবে, নাহলে দুই জায়গা থেকে race করে
@@ -180,9 +211,10 @@ class AttendanceViewModel : ViewModel() {
     fun checkOut(context: Context, ownerId: String, isSolo: Boolean, uid: String) {
         val lat = _state.value.capturedLat
         val lng = _state.value.capturedLng
+        val address = _state.value.capturedAddress
         _state.value = _state.value.copy(isCheckingOut = true, errorMessage = null)
         viewModelScope.launch {
-            val result = repo.checkOut(ownerId, isSolo, uid, lat, lng)
+            val result = repo.checkOut(ownerId, isSolo, uid, lat, lng, address)
             result.onSuccess {
                 _state.value = _state.value.copy(isCheckingOut = false)
             }.onFailure {
