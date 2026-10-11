@@ -374,6 +374,27 @@ object Strings {
 
 
 
+    // Visit screen — today view (member + admin)
+    fun myVisitsTitle() = t("আমার ভিজিট", "My Visits")
+    fun todayLabel() = t("আজ", "Today")
+    fun visitCompletedFooter() = t("সম্পন্ন", "Completed")
+    fun reminderScheduledFooter() = t("নির্ধারিত", "Scheduled")
+    fun totalVisitsTodayLabel() = t("আজকের মোট ভিজিট", "Total Visits Today")
+    fun gaveVisitLabel() = t("ভিজিট দিয়েছে", "Gave visit")
+    fun ofPeopleInline(count: Int) = t("$count জনের মধ্যে", "of $count people")
+    fun noVisitYetLabel() = t("এখনো ভিজিট দেয়নি", "No visit yet")
+    fun teamActivityTodayHeader() = t("টিমের আজকের কার্যক্রম", "Team Activity (Today)")
+    fun searchTeamVisitsPlaceholder() = t("ইউজার, কাস্টমার বা লোকেশন দিয়ে খুঁজুন...", "Search user, customer or location...")
+    fun filterVisitedCount(count: Int) = t("ভিজিট দিয়েছে ($count)", "Visited ($count)")
+    fun filterNotYetCount(count: Int) = t("এখনো দেয়নি ($count)", "Not yet ($count)")
+    fun visitsLastAtInline(count: Int, time: String) =
+        t("$count টি ভিজিট • সর্বশেষ $time", "$count visit${if (count > 1) "s" else ""} • last at $time")
+    fun noVisitToday() = t("আজ কোনো ভিজিট নেই", "No visit today")
+    fun reminderFutureDateError() = t("Reminder এর জন্য ভবিষ্যতের তারিখ বেছে নিন", "Pick a future date for the reminder")
+
+
+
+
     // Terms & Conditions
     fun termsAcceptPrefix() = t("আমি সম্মত ", "I agree to the ")
     fun termsLinkText() = t("শর্তাবলী ও গোপনীয়তা নীতি", "Terms & Conditions")
@@ -437,8 +458,6 @@ These terms may change at any time. Significant changes will be communicated wit
 For questions, please contact your organization's Admin.
     """.trimIndent()
     )
-
-
 
 
 }
